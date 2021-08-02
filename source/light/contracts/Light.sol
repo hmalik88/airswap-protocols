@@ -24,6 +24,10 @@ import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 
 import "./interfaces/ILight.sol";
 
+interface IStaking {
+  function balanceOf(address account) external view returns (uint256);
+}
+
 /**
  * @title Light: Simple atomic swap
  * @notice https://www.airswap.io/
@@ -67,7 +71,13 @@ contract Light is ILight, Ownable {
   bytes32 public immutable DOMAIN_SEPARATOR;
 
   uint256 public constant FEE_DIVISOR = 10000;
+  uint256 public constant MINIMUM_STAKE = 10000;
+
+  // Default signerFee
   uint256 public signerFee;
+
+  // Per sender signerFee
+  mapping(address => uint256) public signerFeeBySender;
 
   /**
    * @notice Double mapping of signers to nonce groups to nonce states
@@ -79,8 +89,13 @@ contract Light is ILight, Ownable {
   mapping(address => address) public override authorized;
 
   address public feeWallet;
+  address public stakingContract;
 
-  constructor(address _feeWallet, uint256 _fee) public {
+  constructor(
+    address _feeWallet,
+    uint256 _fee,
+    address _stakingContract
+  ) public {
     // Ensure the fee wallet is not null
     require(_feeWallet != address(0), "INVALID_FEE_WALLET");
     // Ensure the fee is less than divisor
@@ -99,6 +114,7 @@ contract Light is ILight, Ownable {
 
     feeWallet = _feeWallet;
     signerFee = _fee;
+    stakingContract = _stakingContract;
   }
 
   /**
@@ -199,13 +215,39 @@ contract Light is ILight, Ownable {
     // Transfer token from sender to signer
     senderToken.safeTransferFrom(msg.sender, signerWallet, senderAmount);
 
-    // Transfer token from signer to recipient
-    signerToken.safeTransferFrom(signerWallet, recipient, signerAmount);
+    // Transfer from signer to recipient depends on fee configuration
+    uint256 feeAmount;
 
-    // Transfer fee from signer to feeWallet
-    uint256 feeAmount = signerAmount.mul(signerFee).div(FEE_DIVISOR);
-    if (feeAmount > 0) {
+    if (signerFeeBySender[msg.sender] != 0) {
+      // Signer fee is set for this sender
+      feeAmount = signerAmount.mul(signerFeeBySender[msg.sender]).div(
+        FEE_DIVISOR
+      );
+      // Transfer amount from signer to recipient
+      signerToken.safeTransferFrom(signerWallet, recipient, signerAmount);
+      // Transfer fee from signer to fee wallet
       signerToken.safeTransferFrom(signerWallet, feeWallet, feeAmount);
+    } else {
+      // Signer fee is default
+      feeAmount = signerAmount.mul(signerFee).div(FEE_DIVISOR);
+      if (
+        stakingContract != address(0) &&
+        IStaking(stakingContract).balanceOf(msg.sender) > MINIMUM_STAKE
+      ) {
+        // Transfer amount including fee as rebate from signer to recipient
+        signerToken.safeTransferFrom(
+          signerWallet,
+          recipient,
+          signerAmount + feeAmount
+        );
+      } else {
+        // Transfer amount from signer to recipient
+        signerToken.safeTransferFrom(signerWallet, recipient, signerAmount);
+        if (feeAmount > 0) {
+          // Transfer fee from signer to fee wallet
+          signerToken.safeTransferFrom(signerWallet, feeWallet, feeAmount);
+        }
+      }
     }
 
     // Emit a Swap event
@@ -215,7 +257,7 @@ contract Light is ILight, Ownable {
       signerWallet,
       signerToken,
       signerAmount,
-      signerFee,
+      feeAmount,
       msg.sender,
       senderToken,
       senderAmount

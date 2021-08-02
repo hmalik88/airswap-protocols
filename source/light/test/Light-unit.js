@@ -18,6 +18,7 @@ const encodeERC20Call = (name, args) =>
 const SIGNER_FEE = 30
 const HIGHER_FEE = 50
 const FEE_DIVISOR = 10000
+const STAKING_CONTRACT = ADDRESS_ZERO
 
 contract('Light Unit Tests', async accounts => {
   const [owner, mockSender, mockSigner, feeWallet, anyone] = accounts
@@ -51,7 +52,9 @@ contract('Light Unit Tests', async accounts => {
     })
 
     it('test setting fee and fee wallet correctly', async () => {
-      light = await Light.new(feeWallet, SIGNER_FEE, { from: owner })
+      light = await Light.new(feeWallet, SIGNER_FEE, STAKING_CONTRACT, {
+        from: owner,
+      })
       const storedFee = await light.signerFee.call()
       const storedFeeWallet = await light.feeWallet.call()
       equal(storedFee.toNumber(), SIGNER_FEE)
@@ -60,14 +63,14 @@ contract('Light Unit Tests', async accounts => {
 
     it('test invalid feeWallet', async () => {
       await reverted(
-        Light.new(ADDRESS_ZERO, SIGNER_FEE, { from: owner }),
+        Light.new(ADDRESS_ZERO, SIGNER_FEE, STAKING_CONTRACT, { from: owner }),
         'INVALID_FEE_WALLET'
       )
     })
 
     it('test invalid fee', async () => {
       await reverted(
-        Light.new(feeWallet, 100000000000, { from: owner }),
+        Light.new(feeWallet, 100000000000, STAKING_CONTRACT, { from: owner }),
         'INVALID_FEE'
       )
     })
@@ -75,7 +78,7 @@ contract('Light Unit Tests', async accounts => {
 
   describe('Test swap', () => {
     before('deploy Light', async () => {
-      light = await Light.new(feeWallet, SIGNER_FEE, {
+      light = await Light.new(feeWallet, SIGNER_FEE, STAKING_CONTRACT, {
         from: owner,
       })
       mockSignerToken = await MockContract.new()
@@ -89,6 +92,8 @@ contract('Light Unit Tests', async accounts => {
         senderWallet: mockSender,
         signerWallet: mockSigner,
       })
+      // Because signerAmount is 1 feeAmount is 0
+      const feeAmount = '0'
       const signedOrder = await signOrder(order, mockSigner, light.address)
       await mockSignerToken.givenAnyReturnBool(true)
       await mockSenderToken.givenAnyReturnBool(true)
@@ -103,7 +108,7 @@ contract('Light Unit Tests', async accounts => {
           e.signerWallet === order.signerWallet &&
           e.signerToken === order.signerToken &&
           e.signerAmount.toString() === order.signerAmount &&
-          e.signerFee.toString() === order.signerFee &&
+          e.feeAmount.toString() === feeAmount &&
           e.senderWallet === order.senderWallet &&
           e.senderToken === order.senderToken &&
           e.senderAmount.toString() === order.senderAmount
@@ -144,6 +149,8 @@ contract('Light Unit Tests', async accounts => {
         senderWallet: mockSender,
         signerWallet: anyone,
       })
+      // Because signerAmount is 1 feeAmount is 0
+      const feeAmount = '0'
       await light.authorize(mockSigner, {
         from: anyone,
       })
@@ -161,7 +168,7 @@ contract('Light Unit Tests', async accounts => {
           e.signerWallet === order.signerWallet &&
           e.signerToken === order.signerToken &&
           e.signerAmount.toString() === order.signerAmount &&
-          e.signerFee.toString() === order.signerFee &&
+          e.feeAmount.toString() === feeAmount &&
           e.senderWallet === order.senderWallet &&
           e.senderToken === order.senderToken &&
           e.senderAmount.toString() === order.senderAmount
@@ -284,7 +291,7 @@ contract('Light Unit Tests', async accounts => {
 
   describe('Test fees', () => {
     before('deploy Light', async () => {
-      light = await Light.new(feeWallet, SIGNER_FEE, {
+      light = await Light.new(feeWallet, SIGNER_FEE, STAKING_CONTRACT, {
         from: owner,
       })
       mockSignerToken = await MockContract.new()
@@ -320,6 +327,8 @@ contract('Light Unit Tests', async accounts => {
         senderWallet: mockSender,
         signerWallet: mockSigner,
       })
+      // Because signerAmount is 1000 feeAmount is 3
+      const feeAmount = '3'
       const signedOrder = await signOrder(order, mockSigner, light.address)
       await mockSignerToken.givenAnyReturnBool(true)
       await mockSenderToken.givenAnyReturnBool(true)
@@ -334,7 +343,7 @@ contract('Light Unit Tests', async accounts => {
           e.signerWallet === order.signerWallet &&
           e.signerToken === order.signerToken &&
           e.signerAmount.toString() === order.signerAmount &&
-          e.signerFee.toString() === order.signerFee &&
+          e.feeAmount.toString() === feeAmount &&
           e.senderWallet === order.senderWallet &&
           e.senderToken === order.senderToken &&
           e.senderAmount.toString() === order.senderAmount
@@ -412,7 +421,7 @@ contract('Light Unit Tests', async accounts => {
 
   describe('Test authorization', () => {
     beforeEach('deploy Light', async () => {
-      light = await Light.new(feeWallet, SIGNER_FEE, {
+      light = await Light.new(feeWallet, SIGNER_FEE, STAKING_CONTRACT, {
         from: owner,
       })
       mockSignerToken = await MockContract.new()
@@ -445,7 +454,7 @@ contract('Light Unit Tests', async accounts => {
 
   describe('Test cancel', async () => {
     beforeEach('deploy Light', async () => {
-      light = await Light.new(feeWallet, SIGNER_FEE, {
+      light = await Light.new(feeWallet, SIGNER_FEE, STAKING_CONTRACT, {
         from: owner,
       })
       mockSignerToken = await MockContract.new()

@@ -25,7 +25,7 @@ interface ILight {
     address indexed signerWallet,
     IERC20 signerToken,
     uint256 signerAmount,
-    uint256 signerFee,
+    uint256 feeAmount,
     address indexed senderWallet,
     IERC20 senderToken,
     uint256 senderAmount

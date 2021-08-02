@@ -2,11 +2,10 @@ const Pool = artifacts.require('Pool')
 const ERC20PresetMinterPauser = artifacts.require('ERC20PresetMinterPauser')
 
 const { soliditySha3 } = require('web3-utils')
-
 const { toAtomicString, toDecimalString } = require('@airswap/utils')
 const { emitted, equal, reverted } = require('@airswap/test-utils').assert
-
 const { generateTreeFromData, getRoot, getProof } = require('@airswap/merkle')
+const { ADDRESS_ZERO } = require('@airswap/constants')
 
 function toWei(value, places) {
   return toAtomicString(value, places || 18)
@@ -31,6 +30,9 @@ contract('Pool', async accounts => {
   const CAROL_SCORE = toWei(1000000, 4)
   const CAROL_BAD_SCORE = toWei(5000000, 4)
 
+  const STAKING_CONTRACT = ADDRESS_ZERO
+  const STAKING_TOKEN = ADDRESS_ZERO
+
   let tree
   let feeToken
   let pool
@@ -45,7 +47,13 @@ contract('Pool', async accounts => {
     })
 
     it('Deployed AirSwapTokenPlus contract', async () => {
-      pool = await Pool.new(CLAIM_SCALE, CLAIM_MAX, { from: ownerAddress })
+      pool = await Pool.new(
+        CLAIM_SCALE,
+        CLAIM_MAX,
+        STAKING_CONTRACT,
+        STAKING_TOKEN,
+        { from: ownerAddress }
+      )
     })
   })
 

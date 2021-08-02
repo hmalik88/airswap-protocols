@@ -22,6 +22,9 @@ contract('Pool Unit Tests', async accounts => {
   const BOB_SCORE = toWei(100000, 4)
   const CAROL_SCORE = toWei(1000000, 4)
 
+  const STAKING_CONTRACT = ADDRESS_ZERO
+  const STAKING_TOKEN = ADDRESS_ZERO
+
   let tree
   let feeToken
   let feeToken2
@@ -39,7 +42,13 @@ contract('Pool Unit Tests', async accounts => {
   })
 
   before(async () => {
-    pool = await Pool.new(CLAIM_SCALE, CLAIM_MAX, { from: ownerAddress })
+    pool = await Pool.new(
+      CLAIM_SCALE,
+      CLAIM_MAX,
+      STAKING_CONTRACT,
+      STAKING_TOKEN,
+      { from: ownerAddress }
+    )
     tree = generateTreeFromData({
       [aliceAddress]: ALICE_SCORE,
       [bobAddress]: BOB_SCORE,
@@ -52,23 +61,33 @@ contract('Pool Unit Tests', async accounts => {
 
   describe('Test Constructor', async () => {
     it('Test Constructor successful', async () => {
-      const instance = await Pool.new(CLAIM_SCALE, CLAIM_MAX, {
-        from: ownerAddress,
-      })
+      const instance = await Pool.new(
+        CLAIM_SCALE,
+        CLAIM_MAX,
+        STAKING_CONTRACT,
+        STAKING_TOKEN,
+        {
+          from: ownerAddress,
+        }
+      )
       equal((await instance.scale()).toString(), CLAIM_SCALE.toString())
       equal((await instance.max()).toString(), CLAIM_MAX.toString())
     })
 
     it('Test Constructor reverts when percentage is too high', async () => {
       await reverted(
-        Pool.new(CLAIM_SCALE, 101, { from: ownerAddress }),
+        Pool.new(CLAIM_SCALE, 101, STAKING_CONTRACT, STAKING_TOKEN, {
+          from: ownerAddress,
+        }),
         'MAX_TOO_HIGH'
       )
     })
 
     it('Test Constructor reverts when scale is too high', async () => {
       await reverted(
-        Pool.new(78, CLAIM_MAX, { from: ownerAddress }),
+        Pool.new(78, CLAIM_MAX, STAKING_CONTRACT, STAKING_TOKEN, {
+          from: ownerAddress,
+        }),
         'SCALE_TOO_HIGH'
       )
     })

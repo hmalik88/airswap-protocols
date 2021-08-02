@@ -23,6 +23,10 @@ import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import "@openzeppelin/contracts/cryptography/MerkleProof.sol";
 
+interface IStaking {
+  function stakeFor(address account, uint256 amount) external;
+}
+
 /**
  * @title Pool: Claim Tokens Based on a Pricing Function
  */
@@ -44,6 +48,9 @@ contract Pool is Ownable {
 
   // Mapping of tree root to account to mark as claimed
   mapping(bytes32 => mapping(address => bool)) public claimed;
+
+  address public stakingToken;
+  address public stakingContract;
 
   /**
    * @notice Events
@@ -73,11 +80,18 @@ contract Pool is Ownable {
    * @param _scale uint256
    * @param _max uint256
    */
-  constructor(uint256 _scale, uint256 _max) public {
+  constructor(
+    uint256 _scale,
+    uint256 _max,
+    address _stakingContract,
+    address _stakingToken
+  ) public {
     require(_max <= MAX_PERCENTAGE, "MAX_TOO_HIGH");
     require(_scale <= MAX_SCALE, "SCALE_TOO_HIGH");
     scale = _scale;
     max = _max;
+    stakingContract = _stakingContract;
+    stakingToken = _stakingToken;
   }
 
   /**
@@ -91,19 +105,82 @@ contract Pool is Ownable {
   }
 
   /**
-   * @notice Withdraw tokens from the pool using claims
+   * @notice Withdraw using claims
    * @param claims Claim[]
    * @param token IERC20
    */
   function withdraw(Claim[] memory claims, IERC20 token) external {
-    withdrawProtected(claims, token, 0);
+    token.safeTransfer(msg.sender, withdrawProtected(claims, token, 0));
+  }
+
+  /**
+   * @notice Withdraw using claims and transfer to a recipient
+   * @param claims Claim[]
+   * @param token IERC20
+   * @param recipient address
+   * @param minimumAmount uint256
+   */
+  function withdrawWithRecipient(
+    Claim[] memory claims,
+    IERC20 token,
+    address recipient,
+    uint256 minimumAmount
+  ) external {
+    token.safeTransfer(
+      recipient,
+      withdrawProtected(claims, token, minimumAmount)
+    );
+  }
+
+  /**
+   * @notice Withdraw using claims and stake for sender
+   * @param claims Claim[]
+   * @param token IERC20
+   * @param minimumAmount uint256
+   */
+  function withdrawAndStake(
+    Claim[] memory claims,
+    IERC20 token,
+    uint256 minimumAmount
+  ) external {
+    require(
+      address(token) == address(stakingToken),
+      "MUST_WITHDRAW_STAKING_TOKEN"
+    );
+    IStaking(stakingContract).stakeFor(
+      msg.sender,
+      withdrawProtected(claims, token, minimumAmount)
+    );
+  }
+
+  /**
+   * @notice Withdraw using claims and stake for a recipient
+   * @param claims Claim[]
+   * @param token IERC20
+   * @param recipient address
+   * @param minimumAmount uint256
+   */
+  function withdrawAndStakeFor(
+    Claim[] memory claims,
+    IERC20 token,
+    address recipient,
+    uint256 minimumAmount
+  ) external {
+    require(
+      address(token) == address(stakingToken),
+      "MUST_WITHDRAW_STAKING_TOKEN"
+    );
+    IStaking(stakingContract).stakeFor(
+      recipient,
+      withdrawProtected(claims, token, minimumAmount)
+    );
   }
 
   function withdrawProtected(
     Claim[] memory claims,
     IERC20 token,
     uint256 minimumAmount
-  ) public {
+  ) public returns (uint256) {
     require(claims.length > 0, "CLAIMS_MUST_BE_PROVIDED");
     uint256 totalScore = 0;
     bytes32[] memory rootList = new bytes32[](claims.length);
@@ -122,8 +199,8 @@ contract Pool is Ownable {
     }
     uint256 amount = calculate(totalScore, token);
     require(amount >= minimumAmount, "INSUFFICIENT_AMOUNT");
-    token.safeTransfer(msg.sender, amount);
     emit Withdraw(rootList, msg.sender, token, amount);
+    return amount;
   }
 
   /**
